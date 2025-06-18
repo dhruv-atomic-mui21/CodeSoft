@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUDA - Personal Chat Assistant</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #f8fafc;
+            --accent: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            pointer-events: none;
+        }
+        
+        .chat-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 800px;
+            height: 80vh;
+            max-height: 700px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chat-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .cuda-logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #00d4ff, #5b73f0);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header-info {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .header-status {
+            font-size: 14px;
+            opacity: 0.9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .chat-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            opacity: 0.8;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            position: relative;
+        }
+        
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 3px;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideUp 0.4s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .message.bot .message-avatar {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+        
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, var(--accent), #059669);
+            color: white;
+        }
+        
+        .message-content {
+            max-width: 65%;
+            position: relative;
+        }
+        
+        .message-bubble {
+            padding: 16px 20px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.5;
+            position: relative;
+            box-shadow: var(--shadow);
+        }
+        
+        .message.bot .message-bubble {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border-bottom-left-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+        
+        .message-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            text-align: right;
+        }
+        
+        .message.bot .message-time {
+            text-align: left;
+        }
+        
+        .typing-indicator {
+            display: none;
+            margin-bottom: 20px;
+            animation: slideUp 0.4s ease-out;
+        }
+        
+        .typing-bubble {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            border-bottom-left-radius: 6px;
+            padding: 16px 20px;
+            max-width: 80px;
+            box-shadow: var(--shadow);
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-12px);
+                opacity: 1;
+            }
+        }
+        
+        .chat-input-container {
+            padding: 20px 24px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border);
+            position: relative;
+        }
+        
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            position: relative;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid var(--border);
+            border-radius: 24px;
+            font-size: 16px;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.3s ease;
+            background: var(--bg-secondary);
+            resize: none;
+            min-height: 56px;
+            max-height: 120px;
+        }
+        
+        .chat-input:focus {
+            border-color: var(--primary);
+            background: var(--bg-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .input-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+        
+        .action-button {
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .send-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+        
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .clear-button {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        
+        .clear-button:hover {
+            background: var(--warning);
+            color: white;
+            border-color: var(--warning);
+        }
+        
+        .suggestions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .suggestion-chip {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .suggestion-chip:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        .feature-highlight {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.1));
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            margin: 8px 0;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        
+        .math-result {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .response-time {
+            font-size: 10px;
+            color: var(--text-secondary);
+            opacity: 0.7;
+            margin-left: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .chat-container {
+                height: 90vh;
+                border-radius: 16px;
+            }
+            
+            .chat-header {
+                padding: 16px 20px;
+            }
+            
+            .header-title {
+                font-size: 20px;
+            }
+            
+            .chat-messages {
+                padding: 16px;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+            
+            .chat-stats {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="cuda-logo">C</div>
+            <div class="header-info">
+                <div class="header-title">CUDA</div>
+                <div class="header-status">
+                    <div class="status-dot"></div>
+                    Rule-Based Chat Assistant
+                </div>
+            </div>
+            <div class="chat-stats">
+                <div class="stat-item">
+                    <span id="messageCount">0</span>
+                    <span>Messages</span>
+                </div>
+                <div class="stat-item">
+                    <span id="sessionTime">00:00</span>
+                    <span>Session</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-avatar">C</div>
+                <div class="message-content">
+                    <div class="message-bubble">
+                        👋 Hello! I'm <strong>CUDA</strong>, your rule-based chat assistant. I can help you with:
+                        <div class="feature-highlight">
+                            🧮 Math calculations • 🌍 General questions • 💭 Creative tasks • 🎯 Problem solving • 📝 Information lookup
+                        </div>
+                        What would you like to explore today?
+                    </div>
+                    <div class="message-time" id="welcomeTime"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="message bot">
+                <div class="message-avatar">C</div>
+                <div class="message-content">
+                    <div class="typing-bubble">
+                        <div class="typing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <div class="suggestions" id="suggestions">
+                <div class="suggestion-chip" data-text="What can you do?">💡 Capabilities</div>
+                <div class="suggestion-chip" data-text="Calculate 25 * 47 + 180">🧮 Math</div>
+                <div class="suggestion-chip" data-text="Tell me about AI">🤖 AI Facts</div>
+                <div class="suggestion-chip" data-text="My name is Alex">👤 Introduce</div>
+            </div>
+            <div class="input-wrapper">
+                <textarea 
+                    class="chat-input" 
+                    id="chatInput" 
+                    placeholder="Type your message to CUDA..." 
+                    rows="1"
+                    maxlength="1000">
+                </textarea>
+                <div class="input-actions">
+                    <button class="action-button clear-button" id="clearButton" title="Clear chat">🗑️</button>
+                    <button class="action-button send-button" id="sendButton" title="Send message">🚀</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class RuleBasedChatbot {
+            constructor() {
+                this.userName = null;
+                this.rules = this.defineRules();
+            }
+
+            defineRules() {
+                return [
+                    {
+                        // Greeting
+                        match: input => /^(hi|hello|hey|greetings|good (morning|afternoon|evening))$/i.test(input),
+                        response: () => "Hello! I'm CUDA, your rule-based chatbot. How can I assist you today?"
+                    },
+                    {
+                        // Name introduction
+                        match: input => /my name is (\w+)|i'm (\w+)|call me (\w+)/i.test(input),
+                        response: input => {
+                            const match = input.match(/my name is (\w+)|i'm (\w+)|call me (\w+)/i);
+                            this.userName = match[1] || match[2] || match[3];
+                            return `Nice to meet you, ${this.userName}! I'll remember your name. How can I help you today?`;
+                        }
+                    },
+                    {
+                        // Capabilities inquiry
+                        match: input => /what can you do|your capabilities|help me understand/i.test(input),
+                        response: () => `I'm a rule-based chatbot with these capabilities:
+                        <div class="feature-highlight">
+                            🧮 <strong>Math:</strong> I can solve calculations and equations<br>
+                            🌍 <strong>Information:</strong> Answer questions about various topics<br>
+                            💭 <strong>Creative:</strong> Help with writing and brainstorming<br>
+                            🕒 <strong>Time:</strong> Provide current date and time<br>
+                            🎯 <strong>General:</strong> Chat about technology, science, and more
+                        </div>
+                        Try asking me something!`
+                    },
+                    {
+                        // Math calculation
+                        match: input => /calculate|compute|solve|math|(\d+[\+\-\*\/\^\%\(\)]+[\d\+\-\*\/\^\%\(\)\s]*)/i.test(input),
+                        response: input => {
+                            try {
+                                const expr = input.match(/[\d\+\-\*\/\^\%\(\)\s\.]+/);
+                                if (expr) {
+                                    let expression = expr[0].replace(/\^/g, '**').trim();
+                                    // Basic safety check
+                                    if (!/^[\d\+\-\*\/\(\)\s\.]+$/.test(expression)) {
+                                        return "Please provide a valid math expression using numbers and basic operators (+, -, *, /, %, ^, parentheses).";
+                                    }
+                                    const result = eval(expression);
+                                    const formattedResult = typeof result === 'number' ? 
+                                        (result % 1 === 0 ? result.toString() : result.toFixed(6).replace(/\.?0+$/, '')) : 
+                                        result;
+                                    
+                                    return `<div class="math-result">
+                                        🧮 Expression: ${expr[0]}<br>
+                                        ✨ Result: <strong>${formattedResult}</strong>
+                                    </div>
+                                    ${result > 1000000 ? 'That\'s quite a large number! ' : ''}Need help with more calculations?`;
+                                }
+                                return "Please provide a valid math expression to calculate.";
+                            } catch (error) {
+                                return "Sorry, I couldn't compute that. Please check your math expression and try again.";
+                            }
+                        }
+                    },
+                    {
+                        // Technical queries
+                        match: input => /artificial intelligence|machine learning|AI|technology|science|quantum|programming/i.test(input),
+                        response: input => {
+                            const topic = input.toLowerCase();
+                            if (topic.includes('artificial intelligence') || topic.includes('ai')) {
+                                return "Artificial Intelligence (AI) is fascinating! It's the simulation of human intelligence in machines. AI includes machine learning, natural language processing, computer vision, and robotics. What specific aspect of AI interests you?";
+                            } else if (topic.includes('machine learning')) {
+                                return "Machine Learning is a subset of AI that enables computers to learn from data without being explicitly programmed. It includes supervised learning, unsupervised learning, and reinforcement learning. Would you like to know more about any specific type?";
+                            } else if (topic.includes('programming')) {
+                                return "Programming is the art of creating software! There are many languages like Python, JavaScript, Java, C++, and more. Each has its strengths. What programming topic interests you?";
+                            } else if (topic.includes('quantum')) {
+                                return "Quantum computing is revolutionary! It uses quantum mechanics principles like superposition and entanglement to process information in ways classical computers can't. It's still emerging but shows promise for cryptography and complex simulations.";
+                            } else {
+                                return "I love discussing technology and science! Could you be more specific about what technical topic you'd like to explore?";
+                            }
+                        }
+                    },
+                    {
+                        // Creative tasks
+                        match: input => /write|create|generate|story|poem|idea|brainstorm|creative/i.test(input),
+                        response: input => {
+                            if (input.toLowerCase().includes('story')) {
+                                return "I'd love to help with storytelling! What kind of story interests you - adventure, mystery, sci-fi, fantasy, or something else? Give me a theme or setting and I'll help you brainstorm!";
+                            } else if (input.toLowerCase().includes('poem')) {
+                                return "Poetry is beautiful! What style appeals to you - haiku, sonnet, free verse, or something specific? Or perhaps you have a theme or emotion you'd like to express?";
+                            } else if (input.toLowerCase().includes('idea') || input.toLowerCase().includes('brainstorm')) {
+                                return "Let's brainstorm together! What project, problem, or creative challenge are you working on? I can help generate ideas and explore different approaches.";
+                            } else {
+                                return "I'd be happy to help with creative tasks! Whether it's writing, ideation, storytelling, or brainstorming - let's create something amazing. What did you have in mind?";
+                            }
+                        }
+                    },
+                    {
+                        // Date and time
+                        match: input => /what time|current time|time is it|what.*date|today/i.test(input),
+                        response: () => {
+                            const now = new Date();
+                            const timeString = now.toLocaleTimeString();
+                            const dateString = now.toLocaleDateString('en-US', { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            });
+                            return `🕐 <strong>Current time:</strong> ${timeString}<br>📅 <strong>Today is:</strong> ${dateString}<br><br>Time flies when you're having great conversations! What else can I help you with?`;
+                        }
+                    },
+                    {
+                        // Weather (informational)
+                        match: input => /weather|temperature|forecast|climate|rain|sun/i.test(input),
+                        response: () => "I don't have access to real-time weather data, but I'd recommend checking a reliable weather service like Weather.com or your local meteorological service for accurate forecasts and current conditions."
+                    },
+                    {
+                        // How are you
+                        match: input => /how are you|how do you feel|your mood|are you okay/i.test(input),
+                        response: () => "I'm functioning perfectly and ready to help! As a rule-based chatbot, I'm always in a good 'mood' and eager to assist. How are you doing today?"
+                    },
+                    {
+                        // Farewell
+                        match: input => /^(bye|goodbye|see you|farewell|exit|quit)$/i.test(input),
+                        response: () => `Goodbye${this.userName ? ', ' + this.userName : ''}! 👋 It's been great chatting with you. Have a wonderful day!`
+                    },
+                    {
+                        // Thanks
+                        match: input => /thank you|thanks|appreciate|grateful/i.test(input),
+                        response: () => "You're very welcome! I'm happy to help. Is there anything else you'd like to know or discuss?"
+                    },
+                    {
+                        // Fallback
+                        match: input => true,
+                        response: () => "I'm not sure how to respond to that specific input. Could you rephrase your question or try asking about something else? I can help with math, answer questions, discuss technology, or assist with creative tasks!"
+                    }
+                ];
+            }
+
+            getResponse(input) {
+                const trimmedInput = input.trim();
+                for (const rule of this.rules) {
+                    if (rule.match(trimmedInput)) {
+                        return typeof rule.response === 'function' ? rule.response(trimmedInput) : rule.response;
+                    }
+                }
+                return "Sorry, I didn't understand that.";
+            }
+        }
+
+        class CUDAInterface {
+            constructor() {
+                this.chatbot = new RuleBasedChatbot();
+                this.chatMessages = document.getElementById('chatMessages');
+                this.chatInput = document.getElementById('chatInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.clearButton = document.getElementById('clearButton');
+                this.typingIndicator = document.getElementById('typingIndicator');
+                this.suggestions = document.getElementById('suggestions');
+                this.messageCount = 0;
+                this.startTime = Date.now();
+                
+                this.setupEventListeners();
+                this.initializeSession();
+                this.startSessionTimer();
+            }
+            
+            setupEventListeners() {
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                this.clearButton.addEventListener('click', () => this.clearChat());
+                
+                this.chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+                
+                this.chatInput.addEventListener('input', () => {
+                    this.autoResize();
+                    this.updateSendButton();
+                });
+                
+                this.suggestions.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('suggestion-chip')) {
+                        this.chatInput.value = e.target.dataset.text;
+                        this.sendMessage();
+                    }
+                });
+            }
+            
+            sendMessage() {
+                const message = this.chatInput.value.trim();
+                if (!message) return;
+                
+                this.addMessage(message, 'user');
+                this.chatInput.value = '';
+                this.autoResize();
+                this.updateSendButton();
+                this.messageCount++;
+                this.updateMessageCount();
+                
+                // Show typing indicator
+                this.showTypingIndicator();
+                
+                // Simulate processing time
+                const processingTime = 500 + Math.random() * 1000;
+                
+                setTimeout(() => {
+                    this.hideTypingIndicator();
+                    const startTime = Date.now();
+                    const response = this.chatbot.getResponse(message);
+                    const responseTime = Date.now() - startTime;
+                    
+                    this.addMessage(response, 'bot', responseTime);
+                    this.updateSuggestions();
+                }, processingTime);
+            }
+            
+            addMessage(message, sender, responseTime = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = sender === 'bot' ? 'C' : '👤';
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                
+                const messageBubble = document.createElement('div');
+                messageBubble.className = 'message-bubble';
+                messageBubble.innerHTML = message;
+                
+                const messageTime = document.createElement('div');
+                messageTime.className = 'message-time';
+                const now = new Date();
+                let timeText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                if (responseTime && sender === 'bot') {
+                    timeText += ` <span class="response-time">(${responseTime}ms)</span>`;
+                }
+                messageTime.innerHTML = timeText;
+                
+                messageContent.appendChild(messageBubble);
+                messageContent.appendChild(messageTime);
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(messageContent);
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            scrollToBottom() {
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            clearChat() {
+                this.chatMessages.innerHTML = '';
+                this.messageCount = 0;
+                this.updateMessageCount();
+
+                // Reset welcome message
+                this.addMessage(`👋 Hello! I'm <strong>CUDA</strong>, your rule-based chat assistant. I can help you with:
+                    <div class="feature-highlight">
+                        🧮 Math calculations • 🌍 General questions • 💭 Creative tasks • 🎯 Problem solving • 📝 Information lookup
+                    </div>
+                    What would you like to explore today?`, 'bot');
+            }
+
+            updateSendButton() {
+                this.sendButton.disabled = !this.chatInput.value.trim();
+            }
+
+            autoResize() {
+                this.chatInput.style.height = 'auto';
+                this.chatInput.style.height = `${this.chatInput.scrollHeight}px`;
+            }
+
+            updateMessageCount() {
+                document.getElementById('messageCount').textContent = this.messageCount;
+            }
+
+            startSessionTimer() {
+                setInterval(() => {
+                    const elapsed = Date.now() - this.startTime;
+                    const minutes = Math.floor(elapsed / 60000).toString().padStart(2, '0');
+                    const seconds = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
+                    document.getElementById('sessionTime').textContent = `${minutes}:${seconds}`;
+                }, 1000);
+            }
+
+            initializeSession() {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('welcomeTime').textContent = timeStr;
+            }
+
+            showTypingIndicator() {
+                this.typingIndicator.style.display = 'block';
+                this.scrollToBottom();
+            }
+
+            hideTypingIndicator() {
+                this.typingIndicator.style.display = 'none';
+            }
+
+            updateSuggestions() {
+                // Future enhancement: personalize suggestions based on recent messages
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            new CUDAInterface();
+        });
+    </script>
+</body>
+</html>
