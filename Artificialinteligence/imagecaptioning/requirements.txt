@@ -1,0 +1,9 @@
+flask
+torch
+torchvision
+pytorch-lightning
+sentencepiece
+timm
+nltk
+scikit-learn
+Pillow

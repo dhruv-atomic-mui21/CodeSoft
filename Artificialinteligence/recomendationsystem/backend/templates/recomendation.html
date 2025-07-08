@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Recommendation System</title>
+  <style>
+   /* Universal Reset & Base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Montserrat', sans-serif; /* Modern, clean font */
+  background: linear-gradient(135deg, #1a202c, #2d3748); /* Dark, subtle gradient */
+  min-height: 100vh;
+  padding: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #e2e8f0; /* Light text on dark background */
+}
+
+.container {
+  max-width: 1100px;
+  width: 90%;
+  background: #2d3748; /* Darker background for container */
+  border-radius: 20px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4); /* Deeper shadow for contrast */
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Subtle light border */
+}
+
+.header {
+  background: linear-gradient(45deg, #4c566a, #6a748c); /* Darker, sophisticated gradient */
+  color: white;
+  text-align: center;
+  padding: 50px 20px;
+  position: relative;
+  overflow: hidden; /* For any potential background patterns */
+}
+
+.header::before { /* Subtle background pattern */
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('data:image/svg+xml,%3Csvg width="6" height="6" viewBox="0 0 6 6" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23ffffff" fill-opacity="0.05" fill-rule="evenodd"%3E%3Cpath d="M5 0h1L0 6V5zM6 5v1H5z"/%3E%3C/g%3E%3C/svg%3E');
+  opacity: 0.8;
+  z-index: 0;
+}
+
+.header h1 {
+  font-size: 3em;
+  margin-bottom: 10px;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.header p {
+  font-size: 1.2em;
+  opacity: 0.8;
+  color: #e2e8f0;
+  position: relative;
+  z-index: 1;
+}
+
+.form-section, .results-section {
+  padding: 40px;
+  background: #2d3748; /* Consistent background */
+}
+
+.form-group {
+  margin-bottom: 25px;
+}
+
+label {
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: block;
+  color: #cbd5e0; /* Lighter color for labels */
+}
+
+select, input {
+  width: 100%;
+  padding: 15px;
+  font-size: 1em;
+  border: 1px solid #4a5568; /* Darker border */
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  background-color: #4a5568; /* Dark input background */
+  color: #e2e8f0; /* Light input text */
+}
+
+input::placeholder, select::placeholder {
+  color: #a0aec0; /* Lighter placeholder text */
+}
+
+input:focus, select:focus {
+  border-color: #63b3ed; /* Soft blue for focus */
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.2);
+  background-color: #4a5568; /* Maintain dark background on focus */
+}
+
+.preferences-container {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.preference-tag {
+  background: #63b3ed; /* Accent color */
+  color: white;
+  padding: 8px 14px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  font-size: 0.9em;
+  font-weight: 500;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.remove-btn {
+  background: rgba(0, 0, 0, 0.3); /* Darker semi-transparent background */
+  color: #e2e8f0; /* Light color for the 'x' */
+  margin-left: 8px;
+  font-weight: bold;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.remove-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
+.btn-primary {
+  background: linear-gradient(45deg, #63b3ed, #805ad5); /* Vibrant accent gradient */
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 30px;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: block;
+  margin: 0 auto;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 25px rgba(99, 179, 237, 0.3);
+}
+
+.loading-spinner {
+  display: none;
+  margin: 20px auto;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #4a5568; /* Darker border */
+  border-top: 4px solid #63b3ed; /* Accent color */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {transform: rotate(0);}
+  100% {transform: rotate(360deg);}
+}
+
+.error-message, .success-message {
+  display: none;
+  padding: 12px;
+  margin: 15px 0;
+  border-radius: 10px;
+  text-align: center;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.error-message { background: #e53e3e; } /* Darker red */
+.success-message { background: #38a169; } /* Darker green */
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.recommendation-card {
+  background: #4a5568; /* Darker card background */
+  border-left: 5px solid #805ad5; /* Accent border */
+  padding: 20px;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  transition: 0.3s ease;
+  color: #cbd5e0; /* Lighter text for card content */
+}
+
+.recommendation-card:hover {
+  transform: translateY(-5px);
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 AI Recommendation System</h1>
+      <p>Discover personalized recommendations powered by AI</p>
+    </div>
+
+    <div class="form-section">
+      <form id="recommendationForm">
+        <div class="form-group">
+          <label for="category">Select Category</label>
+          <select id="category" required>
+            <option value="">-- Choose --</option>
+            <option>Books</option>
+            <option>Movies</option>
+            <option>Music</option>
+            <option>Games</option>
+            <option>Travel</option>
+            <option>Technology</option>
+            <option>Fashion</option>
+            <option>Food</option>
+            <option>Restaurants</option>
+            <option>Sports</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="preference">Enter Preferences (press Enter to add)</label>
+          <input type="text" id="preference" placeholder="e.g. thriller, classical, vegetarian..." />
+          <div id="preferencesContainer" class="preferences-container"></div>
+        </div>
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+        <button class="btn-primary" type="submit" id="submitBtn">Get Recommendations</button>
+        <div id="loadingSpinner" class="loading-spinner"></div>
+      </form>
+    </div>
+
+    <div class="results-section" id="resultsSection" style="display: none;">
+      <h2 style="text-align:center; margin-bottom:20px;">✨ Your Recommendations</h2>
+      <div id="resultsGrid" class="results-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    const preferences = [];
+
+    document.getElementById("preference").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const pref = this.value.trim();
+        if (pref && !preferences.includes(pref)) {
+          preferences.push(pref);
+          this.value = '';
+          updatePreferences();
+        }
+      }
+    });
+
+    function updatePreferences() {
+      const container = document.getElementById("preferencesContainer");
+      container.innerHTML = preferences.map((p, i) =>
+        `<div class="preference-tag">${p}
+          <button class="remove-btn" onclick="removePreference(${i})">&times;</button>
+        </div>`).join('');
+    }
+
+    function removePreference(i) {
+      preferences.splice(i, 1);
+      updatePreferences();
+    }
+
+    document.getElementById("recommendationForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const category = document.getElementById("category").value;
+      const errorMessage = document.getElementById("errorMessage");
+      const successMessage = document.getElementById("successMessage");
+      const loadingSpinner = document.getElementById("loadingSpinner");
+      const submitBtn = document.getElementById("submitBtn");
+
+      errorMessage.style.display = "none";
+      successMessage.style.display = "none";
+
+      if (!category) {
+        showError("Please select a category.");
+        return;
+      }
+
+      if (preferences.length === 0) {
+        showError("Please add at least one preference.");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Generating...";
+      loadingSpinner.style.display = "block";
+
+      try {
+        const res = await fetch("/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, preferences })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          displayRecommendations(data.recommendations || []);
+          showSuccess("Recommendations ready!");
+        } else {
+          showError(data.error || "Something went wrong.");
+        }
+
+      } catch (err) {
+        console.error(err);
+        showError("Network error.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Get Recommendations";
+        loadingSpinner.style.display = "none";
+      }
+    });
+
+    function displayRecommendations(recommendations) {
+      const grid = document.getElementById("resultsGrid");
+      const section = document.getElementById("resultsSection");
+
+      grid.innerHTML = recommendations.length
+        ? recommendations.map(r => `
+          <div class="recommendation-card">
+            <h3>${sanitizeHTML(r.title)}</h3>
+            <p>${sanitizeHTML(r.description)}</p>
+          </div>`).join('')
+        : "<p>No recommendations found.</p>";
+
+      section.style.display = "block";
+      section.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function showError(msg) {
+      const e = document.getElementById("errorMessage");
+      e.textContent = msg;
+      e.style.display = "block";
+    }
+
+    function showSuccess(msg) {
+      const s = document.getElementById("successMessage");
+      s.textContent = msg;
+      s.style.display = "block";
+    }
+
+    function sanitizeHTML(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
