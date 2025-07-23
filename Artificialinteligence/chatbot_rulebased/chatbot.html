@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CUDA - Personal Chat Assistant</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -443,6 +443,15 @@
             margin-left: 8px;
         }
         
+        .error-message {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            color: var(--error);
+        }
+        
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -542,331 +551,457 @@
                     id="chatInput" 
                     placeholder="Type your message to CUDA..." 
                     rows="1"
-                    maxlength="1000">
+                    maxlength="1000"
+                    aria-label="Chat input">
                 </textarea>
                 <div class="input-actions">
-                    <button class="action-button clear-button" id="clearButton" title="Clear chat">🗑️</button>
-                    <button class="action-button send-button" id="sendButton" title="Send message">🚀</button>
+                    <button class="action-button clear-button" id="clearButton" title="Clear chat" aria-label="Clear chat">🗑️</button>
+                    <button class="action-button send-button" id="sendButton" title="Send message" aria-label="Send message" disabled>🚀</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Constants
+        const CONFIG = {
+            TYPING_DELAY: { MIN: 500, MAX: 1500 },
+            MAX_MESSAGE_LENGTH: 1000,
+            MATH_DECIMAL_PLACES: 6,
+            ANIMATION_DURATION: 400
+        };
+
+        // Utility functions
+        const utils = {
+            sanitizeInput: (input) => input.trim().replace(/[<>]/g, ''),
+            
+            formatTime: (date = new Date()) => 
+                date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            
+            formatDate: (date = new Date()) => 
+                date.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                }),
+            
+            formatNumber: (num) => {
+                if (typeof num !== 'number' || !isFinite(num)) return 'Invalid';
+                return num % 1 === 0 ? 
+                    num.toString() : 
+                    num.toFixed(CONFIG.MATH_DECIMAL_PLACES).replace(/\.?0+$/, '');
+            },
+            
+            escapeHtml: (text) => 
+                text.replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#x27;'),
+            
+            debounce: (func, delay) => {
+                let timeout;
+                return (...args) => {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(null, args), delay);
+                };
+            }
+        };
+
+        // Math expression evaluator with security
+        const mathEvaluator = {
+            safeOperators: /^[\d\+\-\*\/\(\)\s\.\^\%]+$/,
+            
+            evaluate: (expression) => {
+                try {
+                    const cleaned = expression.replace(/\s+/g, '');
+                    if (!mathEvaluator.safeOperators.test(cleaned)) {
+                        throw new Error('Invalid characters in expression');
+                    }
+                    const normalized = cleaned.replace(/\^/g, '**');
+                    if (/(function|eval|constructor|prototype|__)/i.test(normalized)) {
+                        throw new Error('Potentially dangerous expression');
+                    }
+                    const result = Function(`"use strict"; return (${normalized})`)();
+                    if (typeof result !== 'number' || !isFinite(result)) {
+                        throw new Error('Invalid result');
+                    }
+                    return result;
+                } catch (error) {
+                    throw new Error(`Math error: ${error.message}`);
+                }
+            }
+        };
+
+        // Rule-based chatbot class
         class RuleBasedChatbot {
             constructor() {
-                this.userName = null;
-                this.rules = this.defineRules();
+                this.userData = {
+                    name: null,
+                    preferences: {},
+                    conversationHistory: []
+                };
+                this.rules = this.initializeRules();
             }
 
-            defineRules() {
+            initializeRules() {
                 return [
                     {
-                        // Greeting
-                        match: input => /^(hi|hello|hey|greetings|good (morning|afternoon|evening))$/i.test(input),
-                        response: () => "Hello! I'm CUDA, your rule-based chatbot. How can I assist you today?"
+                        id: 'greeting',
+                        patterns: [
+                            /^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening|night))$/i,
+                            /^(what's\s+up|how's\s+it\s+going|howdy)$/i
+                        ],
+                        response: () => this.getGreetingResponse()
                     },
                     {
-                        // Name introduction
-                        match: input => /my name is (\w+)|i'm (\w+)|call me (\w+)/i.test(input),
-                        response: input => {
-                            const match = input.match(/my name is (\w+)|i'm (\w+)|call me (\w+)/i);
-                            this.userName = match[1] || match[2] || match[3];
-                            return `Nice to meet you, ${this.userName}! I'll remember your name. How can I help you today?`;
-                        }
+                        id: 'name_introduction',
+                        patterns: [
+                            /(?:my\s+name\s+is|i'm|call\s+me|i\s+am)\s+(\w+)/i,
+                            /(\w+)\s+is\s+my\s+name/i
+                        ],
+                        response: (input) => this.handleNameIntroduction(input)
                     },
                     {
-                        // Capabilities inquiry
-                        match: input => /what can you do|your capabilities|help me understand/i.test(input),
-                        response: () => `I'm a rule-based chatbot with these capabilities:
-                        <div class="feature-highlight">
-                            🧮 <strong>Math:</strong> I can solve calculations and equations<br>
-                            🌍 <strong>Information:</strong> Answer questions about various topics<br>
-                            💭 <strong>Creative:</strong> Help with writing and brainstorming<br>
-                            🕒 <strong>Time:</strong> Provide current date and time<br>
-                            🎯 <strong>General:</strong> Chat about technology, science, and more
-                        </div>
-                        Try asking me something!`
+                        id: 'capabilities',
+                        patterns: [
+                            /what\s+can\s+you\s+do/i,
+                            /(?:your\s+)?capabilities/i,
+                            /help\s+me\s+understand/i,
+                            /what\s+are\s+you\s+capable\s+of/i
+                        ],
+                        response: () => this.getCapabilitiesResponse()
                     },
                     {
-                        // Math calculation
-                        match: input => /calculate|compute|solve|math|(\d+[\+\-\*\/\^\%\(\)]+[\d\+\-\*\/\^\%\(\)\s]*)/i.test(input),
-                        response: input => {
-                            try {
-                                const expr = input.match(/[\d\+\-\*\/\^\%\(\)\s\.]+/);
-                                if (expr) {
-                                    let expression = expr[0].replace(/\^/g, '**').trim();
-                                    // Basic safety check
-                                    if (!/^[\d\+\-\*\/\(\)\s\.]+$/.test(expression)) {
-                                        return "Please provide a valid math expression using numbers and basic operators (+, -, *, /, %, ^, parentheses).";
-                                    }
-                                    const result = eval(expression);
-                                    const formattedResult = typeof result === 'number' ? 
-                                        (result % 1 === 0 ? result.toString() : result.toFixed(6).replace(/\.?0+$/, '')) : 
-                                        result;
-                                    
-                                    return `<div class="math-result">
-                                        🧮 Expression: ${expr[0]}<br>
-                                        ✨ Result: <strong>${formattedResult}</strong>
-                                    </div>
-                                    ${result > 1000000 ? 'That\'s quite a large number! ' : ''}Need help with more calculations?`;
-                                }
-                                return "Please provide a valid math expression to calculate.";
-                            } catch (error) {
-                                return "Sorry, I couldn't compute that. Please check your math expression and try again.";
-                            }
-                        }
+                        id: 'math_calculation',
+                        patterns: [
+                            /(?:calculate|compute|solve|math|what\s+is)\s*(.+)/i,
+                            /(\d+[\+\-\*\/\^\%\(\)]+[\d\+\-\*\/\^\%\(\)\s]*)/
+                        ],
+                        response: (input) => this.handleMathCalculation(input)
                     },
                     {
-                        // Technical queries
-                        match: input => /artificial intelligence|machine learning|AI|technology|science|quantum|programming/i.test(input),
-                        response: input => {
-                            const topic = input.toLowerCase();
-                            if (topic.includes('artificial intelligence') || topic.includes('ai')) {
-                                return "Artificial Intelligence (AI) is fascinating! It's the simulation of human intelligence in machines. AI includes machine learning, natural language processing, computer vision, and robotics. What specific aspect of AI interests you?";
-                            } else if (topic.includes('machine learning')) {
-                                return "Machine Learning is a subset of AI that enables computers to learn from data without being explicitly programmed. It includes supervised learning, unsupervised learning, and reinforcement learning. Would you like to know more about any specific type?";
-                            } else if (topic.includes('programming')) {
-                                return "Programming is the art of creating software! There are many languages like Python, JavaScript, Java, C++, and more. Each has its strengths. What programming topic interests you?";
-                            } else if (topic.includes('quantum')) {
-                                return "Quantum computing is revolutionary! It uses quantum mechanics principles like superposition and entanglement to process information in ways classical computers can't. It's still emerging but shows promise for cryptography and complex simulations.";
-                            } else {
-                                return "I love discussing technology and science! Could you be more specific about what technical topic you'd like to explore?";
-                            }
-                        }
+                        id: 'tech_queries',
+                        patterns: [
+                            /artificial\s+intelligence|machine\s+learning|AI(?:\s|$)/i,
+                            /(?:computer\s+)?technology/i,
+                            /(?:computer\s+)?science/i,
+                            /quantum(?:\s+computing)?/i,
+                            /programming|coding|software/i
+                        ],
+                        response: (input) => this.handleTechQuery(input)
                     },
                     {
-                        // Creative tasks
-                        match: input => /write|create|generate|story|poem|idea|brainstorm|creative/i.test(input),
-                        response: input => {
-                            if (input.toLowerCase().includes('story')) {
-                                return "I'd love to help with storytelling! What kind of story interests you - adventure, mystery, sci-fi, fantasy, or something else? Give me a theme or setting and I'll help you brainstorm!";
-                            } else if (input.toLowerCase().includes('poem')) {
-                                return "Poetry is beautiful! What style appeals to you - haiku, sonnet, free verse, or something specific? Or perhaps you have a theme or emotion you'd like to express?";
-                            } else if (input.toLowerCase().includes('idea') || input.toLowerCase().includes('brainstorm')) {
-                                return "Let's brainstorm together! What project, problem, or creative challenge are you working on? I can help generate ideas and explore different approaches.";
-                            } else {
-                                return "I'd be happy to help with creative tasks! Whether it's writing, ideation, storytelling, or brainstorming - let's create something amazing. What did you have in mind?";
-                            }
-                        }
+                        id: 'creative_tasks',
+                        patterns: [
+                            /(?:write|create|generate)\s+(?:a\s+)?(story|poem|idea)/i,
+                            /brainstorm|creative|imagination/i,
+                            /help\s+me\s+(?:write|create)/i
+                        ],
+                        response: (input) => this.handleCreativeTask(input)
                     },
                     {
-                        // Date and time
-                        match: input => /what time|current time|time is it|what.*date|today/i.test(input),
-                        response: () => {
-                            const now = new Date();
-                            const timeString = now.toLocaleTimeString();
-                            const dateString = now.toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
-                            });
-                            return `🕐 <strong>Current time:</strong> ${timeString}<br>📅 <strong>Today is:</strong> ${dateString}<br><br>Time flies when you're having great conversations! What else can I help you with?`;
-                        }
+                        id: 'time_date',
+                        patterns: [
+                            /what\s+time|current\s+time|time\s+is\s+it/i,
+                            /what.*date|today.*date|current.*date/i,
+                            /(?:what\s+day|today)\s+is\s+it/i
+                        ],
+                        response: () => this.getTimeResponse()
                     },
                     {
-                        // Weather (informational)
-                        match: input => /weather|temperature|forecast|climate|rain|sun/i.test(input),
-                        response: () => "I don't have access to real-time weather data, but I'd recommend checking a reliable weather service like Weather.com or your local meteorological service for accurate forecasts and current conditions."
+                        id: 'weather',
+                        patterns: [
+                            /weather|temperature|forecast|climate/i,
+                            /(?:is\s+it\s+)?(?:raining|sunny|cloudy)/i
+                        ],
+                        response: () => this.getWeatherResponse()
                     },
                     {
-                        // How are you
-                        match: input => /how are you|how do you feel|your mood|are you okay/i.test(input),
-                        response: () => "I'm functioning perfectly and ready to help! As a rule-based chatbot, I'm always in a good 'mood' and eager to assist. How are you doing today?"
+                        id: 'how_are_you',
+                        patterns: [
+                            /how\s+are\s+you/i,
+                            /how\s+do\s+you\s+feel/i,
+                            /your\s+mood|are\s+you\s+okay/i
+                        ],
+                        response: () => this.getStatusResponse()
                     },
                     {
-                        // Farewell
-                        match: input => /^(bye|goodbye|see you|farewell|exit|quit)$/i.test(input),
-                        response: () => `Goodbye${this.userName ? ', ' + this.userName : ''}! 👋 It's been great chatting with you. Have a wonderful day!`
+                        id: 'thanks',
+                        patterns: [
+                            /thank\s+you|thanks|appreciate|grateful/i,
+                            /that's\s+helpful|very\s+helpful/i
+                        ],
+                        response: () => this.getThanksResponse()
                     },
                     {
-                        // Thanks
-                        match: input => /thank you|thanks|appreciate|grateful/i.test(input),
-                        response: () => "You're very welcome! I'm happy to help. Is there anything else you'd like to know or discuss?"
-                    },
-                    {
-                        // Fallback
-                        match: input => true,
-                        response: () => "I'm not sure how to respond to that specific input. Could you rephrase your question or try asking about something else? I can help with math, answer questions, discuss technology, or assist with creative tasks!"
+                        id: 'farewell',
+                        patterns: [
+                            /^(bye|goodbye|see\s+you|farewell|exit|quit)$/i,
+                            /^(take\s+care|until\s+next\s+time)$/i
+                        ],
+                        response: () => this.getFarewellResponse()
                     }
                 ];
             }
 
-            getResponse(input) {
-                const trimmedInput = input.trim();
+            processInput(input) {
+                const sanitized = utils.sanitizeInput(input);
+                this.userData.conversationHistory.push({
+                    type: 'user',
+                    message: sanitized,
+                    timestamp: new Date()
+                });
+
                 for (const rule of this.rules) {
-                    if (rule.match(trimmedInput)) {
-                        return typeof rule.response === 'function' ? rule.response(trimmedInput) : rule.response;
+                    for (const pattern of rule.patterns) {
+                        const match = sanitized.match(pattern);
+                        if (match) {
+                            const response = rule.response(sanitized, match);
+                            this.userData.conversationHistory.push({
+                                type: 'bot',
+                                message: response,
+                                timestamp: new Date()
+                            });
+                            return response;
+                        }
                     }
                 }
-                return "Sorry, I didn't understand that.";
+                return this.getFallbackResponse(sanitized);
             }
-        }
 
-        class CUDAInterface {
-            constructor() {
-                this.chatbot = new RuleBasedChatbot();
-                this.chatMessages = document.getElementById('chatMessages');
-                this.chatInput = document.getElementById('chatInput');
-                this.sendButton = document.getElementById('sendButton');
-                this.clearButton = document.getElementById('clearButton');
-                this.typingIndicator = document.getElementById('typingIndicator');
-                this.suggestions = document.getElementById('suggestions');
-                this.messageCount = 0;
-                this.startTime = Date.now();
-                
-                this.setupEventListeners();
-                this.initializeSession();
-                this.startSessionTimer();
+            getGreetingResponse() {
+                const greetings = [
+                    "Hello! I'm CUDA, your rule-based chatbot. How can I assist you today?",
+                    "Hi there! Ready to help with whatever you need.",
+                    "Greetings! What would you like to explore together?"
+                ];
+                return this.userData.name ? 
+                    `Hello, ${this.userData.name}! How can I help you today?` :
+                    greetings[Math.floor(Math.random() * greetings.length)];
             }
-            
-            setupEventListeners() {
-                this.sendButton.addEventListener('click', () => this.sendMessage());
-                this.clearButton.addEventListener('click', () => this.clearChat());
-                
-                this.chatInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage();
-                    }
-                });
-                
-                this.chatInput.addEventListener('input', () => {
-                    this.autoResize();
-                    this.updateSendButton();
-                });
-                
-                this.suggestions.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('suggestion-chip')) {
-                        this.chatInput.value = e.target.dataset.text;
-                        this.sendMessage();
-                    }
-                });
-            }
-            
-            sendMessage() {
-                const message = this.chatInput.value.trim();
-                if (!message) return;
-                
-                this.addMessage(message, 'user');
-                this.chatInput.value = '';
-                this.autoResize();
-                this.updateSendButton();
-                this.messageCount++;
-                this.updateMessageCount();
-                
-                // Show typing indicator
-                this.showTypingIndicator();
-                
-                // Simulate processing time
-                const processingTime = 500 + Math.random() * 1000;
-                
-                setTimeout(() => {
-                    this.hideTypingIndicator();
-                    const startTime = Date.now();
-                    const response = this.chatbot.getResponse(message);
-                    const responseTime = Date.now() - startTime;
-                    
-                    this.addMessage(response, 'bot', responseTime);
-                    this.updateSuggestions();
-                }, processingTime);
-            }
-            
-            addMessage(message, sender, responseTime = null) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `message ${sender}`;
-                
-                const avatar = document.createElement('div');
-                avatar.className = 'message-avatar';
-                avatar.textContent = sender === 'bot' ? 'C' : '👤';
-                
-                const messageContent = document.createElement('div');
-                messageContent.className = 'message-content';
-                
-                const messageBubble = document.createElement('div');
-                messageBubble.className = 'message-bubble';
-                messageBubble.innerHTML = message;
-                
-                const messageTime = document.createElement('div');
-                messageTime.className = 'message-time';
-                const now = new Date();
-                let timeText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                if (responseTime && sender === 'bot') {
-                    timeText += ` <span class="response-time">(${responseTime}ms)</span>`;
+
+            handleNameIntroduction(input) {
+                const matches = input.match(/(?:my\s+name\s+is|i'm|call\s+me|i\s+am)\s+(\w+)/i) ||
+                               input.match(/(\w+)\s+is\s+my\s+name/i);
+                if (matches) {
+                    this.userData.name = matches[1];
+                    return `Nice to meet you, ${this.userData.name}! I'll remember your name. How can I help you today?`;
                 }
-                messageTime.innerHTML = timeText;
-                
-                messageContent.appendChild(messageBubble);
-                messageContent.appendChild(messageTime);
-                messageDiv.appendChild(avatar);
-                messageDiv.appendChild(messageContent);
-                
-                this.chatMessages.appendChild(messageDiv);
-                this.scrollToBottom();
+                return "I'd love to know your name! You can say 'My name is [name]' or 'I'm [name]'.";
             }
 
-            scrollToBottom() {
-                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            getCapabilitiesResponse() {
+                return `I'm a rule-based chatbot with these capabilities:
+                <div class="feature-highlight">
+                    🧮 <strong>Math:</strong> I can solve calculations and equations<br>
+                    🌍 <strong>Information:</strong> Answer questions about various topics<br>
+                    💭 <strong>Creative:</strong> Help with writing and brainstorming<br>
+                    🕒 <strong>Time:</strong> Provide current date and time<br>
+                    🎯 <strong>General:</strong> Chat about technology, science, and more
+                </div>
+                Try asking me something!`;
             }
 
-            clearChat() {
-                this.chatMessages.innerHTML = '';
-                this.messageCount = 0;
-                this.updateMessageCount();
-
-                // Reset welcome message
-                this.addMessage(`👋 Hello! I'm <strong>CUDA</strong>, your rule-based chat assistant. I can help you with:
-                    <div class="feature-highlight">
-                        🧮 Math calculations • 🌍 General questions • 💭 Creative tasks • 🎯 Problem solving • 📝 Information lookup
+            handleMathCalculation(input) {
+                try {
+                    const mathMatch = input.match(/[\d\+\-\*\/\^\%\(\)\s\.]+/);
+                    if (!mathMatch) {
+                        return "Please provide a valid mathematical expression using numbers and operators (+, -, *, /, %, ^, parentheses).";
+                    }
+                    const expression = mathMatch[0].trim();
+                    const result = mathEvaluator.evaluate(expression);
+                    const formattedResult = utils.formatNumber(result);
+                    return `<div class="math-result">
+                        🧮 Expression: ${utils.escapeHtml(expression)}<br>
+                        ✨ Result: <strong>${formattedResult}</strong>
                     </div>
-                    What would you like to explore today?`, 'bot');
+                    ${result > 1000000 ? 'That\'s quite a large number! ' : ''}Need help with more calculations?`;
+                } catch (error) {
+                    return `<div class="error-message">
+                        ❌ ${error.message}<br>
+                        Please check your math expression and try again.
+                    </div>`;
+                }
             }
 
-            updateSendButton() {
-                this.sendButton.disabled = !this.chatInput.value.trim();
+            handleTechQuery(input) {
+                const topic = input.toLowerCase();
+                const responses = {
+                    'artificial intelligence': "Artificial Intelligence (AI) is fascinating! It's the simulation of human intelligence in machines. AI includes machine learning, natural language processing, computer vision, and robotics. What specific aspect of AI interests you?",
+                    'machine learning': "Machine Learning is a subset of AI that enables computers to learn from data without being explicitly programmed. It includes supervised learning, unsupervised learning, and reinforcement learning. Would you like to know more about any of these?",
+                    'technology': "Technology is constantly evolving, encompassing everything from computers and software to quantum computing and AI. What technology topic interests you?",
+                    'programming': "Programming is the art of writing instructions for computers. There are many languages like JavaScript, Python, and C++. What programming language or concept would you like to discuss?",
+                    'quantum computing': "Quantum computing uses quantum bits to perform complex calculations much faster than classical computers. It's an exciting and emerging field. Do you want to learn about quantum algorithms or hardware?",
+                    'software': "Software development involves designing, coding, testing, and maintaining applications. Are you interested in web development, mobile apps, or something else?"
+                };
+                for (const key in responses) {
+                    if (topic.includes(key)) {
+                        return responses[key];
+                    }
+                }
+                return "That's an interesting tech topic! Could you please specify your question or what you'd like to know more about?";
             }
 
-            autoResize() {
-                this.chatInput.style.height = 'auto';
-                this.chatInput.style.height = `${this.chatInput.scrollHeight}px`;
+            handleCreativeTask(input) {
+                const creativePrompts = [
+                    "Here's a short story idea: A time traveler stuck in the past tries to fix history without changing the future.",
+                    "How about a poem? 'In the quiet night, stars whisper secrets of the light.'",
+                    "Let's brainstorm ideas for a novel about a detective with supernatural powers.",
+                    "I can help you generate creative writing prompts or ideas. What genre do you prefer?"
+                ];
+                return creativePrompts[Math.floor(Math.random() * creativePrompts.length)];
             }
 
-            updateMessageCount() {
-                document.getElementById('messageCount').textContent = this.messageCount;
-            }
-
-            startSessionTimer() {
-                setInterval(() => {
-                    const elapsed = Date.now() - this.startTime;
-                    const minutes = Math.floor(elapsed / 60000).toString().padStart(2, '0');
-                    const seconds = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
-                    document.getElementById('sessionTime').textContent = `${minutes}:${seconds}`;
-                }, 1000);
-            }
-
-            initializeSession() {
+            getTimeResponse() {
                 const now = new Date();
-                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                document.getElementById('welcomeTime').textContent = timeStr;
+                return `Current time is ${utils.formatTime(now)} on ${utils.formatDate(now)}.`;
             }
 
-            showTypingIndicator() {
-                this.typingIndicator.style.display = 'block';
-                this.scrollToBottom();
+            getWeatherResponse() {
+                return "I don't have real-time weather data, but you can check your local weather forecast online or use a weather app.";
             }
 
-            hideTypingIndicator() {
-                this.typingIndicator.style.display = 'none';
+            getStatusResponse() {
+                return "I'm just a program, but I'm here and ready to help you!";
             }
 
-            updateSuggestions() {
-                // Future enhancement: personalize suggestions based on recent messages
+            getThanksResponse() {
+                return "You're welcome! If you have more questions, feel free to ask.";
+            }
+
+            getFarewellResponse() {
+                return "Goodbye! Have a great day. Feel free to come back anytime.";
+            }
+
+            getFallbackResponse(input) {
+                return `I'm not sure how to respond to "${utils.escapeHtml(input)}". Could you please rephrase or ask something else?`;
             }
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            new CUDAInterface();
+        // UI and interaction logic
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const clearButton = document.getElementById('clearButton');
+        const suggestions = document.getElementById('suggestions');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const messageCountElem = document.getElementById('messageCount');
+        const sessionTimeElem = document.getElementById('sessionTime');
+
+        let chatbot = new RuleBasedChatbot();
+        let messageCount = 1; // Starting with welcome message
+        let sessionStartTime = new Date();
+        let sessionTimerInterval;
+
+        function updateSessionTime() {
+            const now = new Date();
+            const diff = new Date(now - sessionStartTime);
+            const minutes = String(diff.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(diff.getUTCSeconds()).padStart(2, '0');
+            sessionTimeElem.textContent = `${minutes}:${seconds}`;
+        }
+
+        function addMessage(content, sender = 'bot') {
+            const messageElem = document.createElement('div');
+            messageElem.classList.add('message', sender);
+            const avatarElem = document.createElement('div');
+            avatarElem.classList.add('message-avatar');
+            avatarElem.textContent = sender === 'bot' ? 'C' : 'U';
+            const contentElem = document.createElement('div');
+            contentElem.classList.add('message-content');
+            const bubbleElem = document.createElement('div');
+            bubbleElem.classList.add('message-bubble');
+            bubbleElem.innerHTML = content;
+            const timeElem = document.createElement('div');
+            timeElem.classList.add('message-time');
+            timeElem.textContent = utils.formatTime();
+            contentElem.appendChild(bubbleElem);
+            contentElem.appendChild(timeElem);
+            messageElem.appendChild(avatarElem);
+            messageElem.appendChild(contentElem);
+            chatMessages.appendChild(messageElem);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            messageCount++;
+            messageCountElem.textContent = messageCount.toString();
+        }
+
+        function showTypingIndicator(show) {
+            typingIndicator.style.display = show ? 'block' : 'none';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function handleUserInput() {
+            const input = chatInput.value.trim();
+            if (input.length === 0 || input.length > CONFIG.MAX_MESSAGE_LENGTH) {
+                sendButton.disabled = true;
+                return;
+            }
+            sendButton.disabled = false;
+        }
+
+        function sendMessage() {
+            const input = chatInput.value.trim();
+            if (input.length === 0) return;
+            addMessage(utils.escapeHtml(input), 'user');
+            chatInput.value = '';
+            sendButton.disabled = true;
+            showTypingIndicator(true);
+
+            // Simulate typing delay
+            const delay = Math.floor(Math.random() * (CONFIG.TYPING_DELAY.MAX - CONFIG.TYPING_DELAY.MIN + 1)) + CONFIG.TYPING_DELAY.MIN;
+            setTimeout(() => {
+                const response = chatbot.processInput(input);
+                showTypingIndicator(false);
+                addMessage(response, 'bot');
+            }, delay);
+        }
+
+        function clearChat() {
+            chatMessages.innerHTML = '';
+            messageCount = 0;
+            messageCountElem.textContent = '0';
+            chatbot = new RuleBasedChatbot();
+            addMessage(`👋 Hello! I'm <strong>CUDA</strong>, your rule-based chat assistant. I can help you with:
+                <div class="feature-highlight">
+                    🧮 Math calculations • 🌍 General questions • 💭 Creative tasks • 🎯 Problem solving • 📝 Information lookup
+                </div>
+                What would you like to explore today?`, 'bot');
+            messageCount = 1;
+            messageCountElem.textContent = '1';
+            sessionStartTime = new Date();
+            updateSessionTime();
+        }
+
+        function handleSuggestionClick(event) {
+            if (event.target.classList.contains('suggestion-chip')) {
+                const text = event.target.getAttribute('data-text');
+                chatInput.value = text;
+                chatInput.focus();
+                handleUserInput();
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            clearChat();
+            sessionTimerInterval = setInterval(updateSessionTime, 1000);
+        });
+
+        chatInput.addEventListener('input', utils.debounce(handleUserInput, 200));
+        sendButton.addEventListener('click', sendMessage);
+        clearButton.addEventListener('click', clearChat);
+        suggestions.addEventListener('click', handleSuggestionClick);
+
+        // Accessibility: send message on Enter key (Shift+Enter for newline)
+        chatInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                if (!sendButton.disabled) {
+                    sendMessage();
+                }
+            }
         });
     </script>
 </body>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Customer Churn Prediction</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f3f4f6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 25px;
+      font-size: 24px;
+      color: #333;
+    }
+
+    label {
+      margin-top: 15px;
+      font-weight: 500;
+      display: block;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 25px;
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #4338ca;
+    }
+
+    #result {
+      margin-top: 20px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    #result.success {
+      color: green;
+    }
+
+    #result.error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Customer Churn Prediction</h1>
+    <form id="churnForm">
+      <label for="CreditScore">Credit Score</label>
+      <input type="number" id="CreditScore" name="CreditScore" required min="300" max="850" />
+
+      <label for="Age">Age</label>
+      <input type="number" id="Age" name="Age" required min="18" max="100" />
+
+      <label for="Tenure">Tenure (years)</label>
+      <input type="number" id="Tenure" name="Tenure" required min="0" max="10" />
+
+      <label for="Balance">Balance</label>
+      <input type="number" id="Balance" name="Balance" required step="0.01" min="0" />
+
+      <label for="NumOfProducts">Number of Products</label>
+      <select id="NumOfProducts" name="NumOfProducts" required>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+
+      <label for="HasCrCard">Has Credit Card</label>
+      <select id="HasCrCard" name="HasCrCard" required>
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+
+      <label for="IsActiveMember">Is Active Member</label>
+      <select id="IsActiveMember" name="IsActiveMember" required>
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+
+      <label for="EstimatedSalary">Estimated Salary</label>
+      <input type="number" id="EstimatedSalary" name="EstimatedSalary" required step="0.01" min="0" />
+
+      <label for="Geography">Geography</label>
+      <select id="Geography" name="Geography" required>
+        <option value="France">France</option>
+        <option value="Germany">Germany</option>
+        <option value="Spain">Spain</option>
+      </select>
+
+      <label for="Gender">Gender</label>
+      <select id="Gender" name="Gender" required>
+        <option value="Female">Female</option>
+        <option value="Male">Male</option>
+      </select>
+
+      <button type="submit">Predict Churn</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById('churnForm');
+    const resultDiv = document.getElementById('result');
+
+    // Create a div to show model results dynamically
+    let modelResultsDiv = document.getElementById('model-results');
+    if (!modelResultsDiv) {
+      modelResultsDiv = document.createElement('div');
+      modelResultsDiv.id = 'model-results';
+      resultDiv.insertAdjacentElement('afterend', modelResultsDiv);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      resultDiv.textContent = 'Predicting...';
+      resultDiv.className = '';
+      modelResultsDiv.innerHTML = '';
+
+      const formData = new FormData(form);
+      const data = {};
+
+      formData.forEach((value, key) => {
+        data[key] = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'HasCrCard', 'IsActiveMember', 'EstimatedSalary'].includes(key)
+          ? Number(value)
+          : value;
+      });
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          // Display overall result summary
+          let anyChurn = false;
+          let modelOutputHtml = '<h3>Model Predictions:</h3><ul>';
+          for (const [modelName, predictionData] of Object.entries(result)) {
+            const churnText = predictionData.prediction === 1 ? 'Yes' : 'No';
+            const probability = (predictionData.probability * 100).toFixed(2);
+            modelOutputHtml += `<li><strong>${modelName}</strong>: Churn Prediction: ${churnText} (Probability: ${probability}%)</li>`;
+            if (predictionData.prediction === 1) {
+              anyChurn = true;
+            }
+          }
+          modelOutputHtml += '</ul>';
+
+          resultDiv.textContent = anyChurn ? 'Churn predicted by at least one model.' : 'No churn predicted by any model.';
+          resultDiv.className = anyChurn ? 'success' : '';
+          modelResultsDiv.innerHTML = modelOutputHtml;
+        } else {
+          resultDiv.textContent = `Error: ${result.error}`;
+          resultDiv.className = 'error';
+        }
+      } catch (error) {
+        resultDiv.textContent = `Error: ${error.message}`;
+        resultDiv.className = 'error';
+      }
+    });
+  </script>
+</body>
+</html>

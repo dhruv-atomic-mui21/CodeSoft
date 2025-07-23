@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Handwritten Text Generation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+        #generateBtn {
+            margin-top: 10px;
+        }
+        #textInput {
+            width: 400px;
+            font-size: 16px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Handwritten Text Generation</h1>
+    <p>Enter text to generate handwritten-like strokes:</p>
+    <input type="text" id="textInput" placeholder="Enter text here" />
+    <button id="generateBtn">Generate Handwriting</button>
+    <canvas id="canvas" width="600" height="200"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const generateBtn = document.getElementById('generateBtn');
+        const textInput = document.getElementById('textInput');
+
+        function drawStrokes(strokes) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = 'black';
+
+            const scale = 20;
+            let x = canvas.width / 2;
+            let y = canvas.height / 2;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+
+            for (let i = 0; i < strokes.length; i++) {
+                const [dx, dy, penState] = strokes[i];
+                const newX = x + dx * scale;
+                const newY = y + dy * scale;
+
+                if (penState < 0.5) {
+                    ctx.lineTo(newX, newY); // pen down → draw
+                } else {
+                    ctx.moveTo(newX, newY); // pen up → move
+                }
+
+                x = newX;
+                y = newY;
+            }
+
+            ctx.stroke();
+        }
+
+
+        generateBtn.addEventListener('click', () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                alert('Please enter some text');
+                return;
+            }
+            console.log('Sending request to /generate with text:', text);
+            fetch('/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text }),
+            })
+            .then(response => {
+                console.log('Received response:', response);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    drawStrokes(data.generated_strokes);
+                }
+            })
+            .catch(err => {
+                alert('Request failed: ' + err);
+                console.error('Fetch error:', err);
+            });
+        });
+    </script>
+</body>
+</html>
