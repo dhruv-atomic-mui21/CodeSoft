@@ -3,6 +3,8 @@
 ## Project Overview
 CUDA is a rule-based chat assistant designed to provide interactive conversations with capabilities including math calculations, general questions, creative tasks, problem solving, and information lookup. It features a modern web-based chat interface with a clean and responsive design.
 
+This project is part of the CodeSoft internship program.
+
 ## Features
 - Rule-based natural language understanding with predefined patterns.
 - Math expression evaluation and calculation.

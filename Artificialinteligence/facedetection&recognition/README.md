@@ -3,6 +3,8 @@
 ## Project Overview
 This project is a web-based AI face detection and recognition application that performs real-time facial analysis using advanced AI models. It supports live camera feed detection, image upload for analysis, and a known faces database.
 
+This project is part of the CodeSoft internship program.
+
 ## Features
 - Real-time face detection using webcam.
 - Face landmark detection, age, gender, and expression recognition.
