@@ -1,0 +1,8 @@
+Flask
+requests
+python-dotenv
+torch
+numpy
+scikit-learn
+pandas
+face-api.js
